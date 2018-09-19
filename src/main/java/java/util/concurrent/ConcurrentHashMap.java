@@ -187,6 +187,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
         /**
          * 将当前对象的next属性设置为输入的HashEntry,
          * putOrderedObject的作用是设置obj对象中offset偏移地址对应的整型field的值为指定值。但不提供可见性，如果需要具备可见性，则需要指定字段为volatile。
+         * TODO 后续补充putOrderedObject资料
          */
         final void setNext(HashEntry<K,V> n) {
             UNSAFE.putOrderedObject(this, nextOffset, n);
@@ -210,9 +211,9 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
     }
 
     /**
-     * Gets the ith element of given table (if nonnull) with volatile
-     * read semantics. Note: This is manually integrated into a few
-     * performance-sensitive methods to reduce call overhead.
+     * 用volatile语义获取给定table的第i个元素，
+     * 注意：这是手动集成到一些性能敏感的方法，以减少调用的开销
+     * TODO 后续补充getObjectVolatile资料
      */
     @SuppressWarnings("unchecked")
     static final <K,V> HashEntry<K,V> entryAt(HashEntry<K,V>[] tab, int i) {
@@ -222,8 +223,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
     }
 
     /**
-     * Sets the ith element of given table, with volatile write
-     * semantics. (See above about use of putOrderedObject.)
+     * 用volatile语义设置给定table的第i个元素为e
      */
     static final <K,V> void setEntryAt(HashEntry<K,V>[] tab, int i,
                                        HashEntry<K,V> e) {
@@ -231,23 +231,20 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
     }
 
     /**
-     * Applies a supplemental hash function to a given hashCode, which
-     * defends against poor quality hash functions.  This is critical
-     * because ConcurrentHashMap uses power-of-two length hash tables,
-     * that otherwise encounter collisions for hashCodes that do not
-     * differ in lower or upper bits.
+     * 获得key自身的hashCode，然后进行加工，这么做是为了防止key的hash函数质量太低，
+     * HashMap使用长度为2的幂次方hash表，否则会遇到hash冲突，而这些hash值在低位和高位上不同。
      */
     private int hash(Object k) {
         int h = hashSeed;
 
+        // 如果是String类型的key，并且启用了备选hash算法，则使用备选hash算法计算hash
         if ((0 != h) && (k instanceof String)) {
             return sun.misc.Hashing.stringHash32((String) k);
         }
 
         h ^= k.hashCode();
 
-        // Spread bits to regularize both segment and index locations,
-        // using variant of single-word Wang/Jenkins hash.
+        // 扩展位以规范segment和index的位置
         h += (h <<  15) ^ 0xffffcd7d;
         h ^= (h >>> 10);
         h += (h <<   3);
@@ -257,9 +254,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
     }
 
     /**
-     * Segments are specialized versions of hash tables.  This
-     * subclasses from ReentrantLock opportunistically, just to
-     * simplify some locking and avoid separate construction.
+     * Segments是专门版本的hash表。这个内部类继承了ReentrantLock，只是简单的使用了它锁定的功能。
      */
     static final class Segment<K,V> extends ReentrantLock implements Serializable {
         /*
