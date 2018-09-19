@@ -1,105 +1,11 @@
-/*
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
-/*
- *
- *
- *
- *
- *
- * Written by Doug Lea with assistance from members of JCP JSR-166
- * Expert Group and released to the public domain, as explained at
- * http://creativecommons.org/publicdomain/zero/1.0/
- */
-
 package java.util.concurrent;
-import java.util.concurrent.locks.*;
-import java.util.*;
-import java.io.Serializable;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.ObjectStreamField;
+import java.io.Serializable;
+import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
-/**
- * A hash table supporting full concurrency of retrievals and
- * adjustable expected concurrency for updates. This class obeys the
- * same functional specification as {@link java.util.Hashtable}, and
- * includes versions of methods corresponding to each method of
- * <tt>Hashtable</tt>. However, even though all operations are
- * thread-safe, retrieval operations do <em>not</em> entail locking,
- * and there is <em>not</em> any support for locking the entire table
- * in a way that prevents all access.  This class is fully
- * interoperable with <tt>Hashtable</tt> in programs that rely on its
- * thread safety but not on its synchronization details.
- *
- * <p> Retrieval operations (including <tt>get</tt>) generally do not
- * block, so may overlap with update operations (including
- * <tt>put</tt> and <tt>remove</tt>). Retrievals reflect the results
- * of the most recently <em>completed</em> update operations holding
- * upon their onset.  For aggregate operations such as <tt>putAll</tt>
- * and <tt>clear</tt>, concurrent retrievals may reflect insertion or
- * removal of only some entries.  Similarly, Iterators and
- * Enumerations return elements reflecting the state of the hash table
- * at some point at or since the creation of the iterator/enumeration.
- * They do <em>not</em> throw {@link ConcurrentModificationException}.
- * However, iterators are designed to be used by only one thread at a time.
- *
- * <p> The allowed concurrency among update operations is guided by
- * the optional <tt>concurrencyLevel</tt> constructor argument
- * (default <tt>16</tt>), which is used as a hint for internal sizing.  The
- * table is internally partitioned to try to permit the indicated
- * number of concurrent updates without contention. Because placement
- * in hash tables is essentially random, the actual concurrency will
- * vary.  Ideally, you should choose a value to accommodate as many
- * threads as will ever concurrently modify the table. Using a
- * significantly higher value than you need can waste space and time,
- * and a significantly lower value can lead to thread contention. But
- * overestimates and underestimates within an order of magnitude do
- * not usually have much noticeable impact. A value of one is
- * appropriate when it is known that only one thread will modify and
- * all others will only read. Also, resizing this or any other kind of
- * hash table is a relatively slow operation, so, when possible, it is
- * a good idea to provide estimates of expected table sizes in
- * constructors.
- *
- * <p>This class and its views and iterators implement all of the
- * <em>optional</em> methods of the {@link Map} and {@link Iterator}
- * interfaces.
- *
- * <p> Like {@link Hashtable} but unlike {@link HashMap}, this class
- * does <em>not</em> allow <tt>null</tt> to be used as a key or value.
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @since 1.5
- * @author Doug Lea
- * @param <K> the type of keys maintained by this map
- * @param <V> the type of mapped values
- */
 public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
         implements ConcurrentMap<K, V>, Serializable {
     private static final long serialVersionUID = 7249069246763182397L;
@@ -130,72 +36,60 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
     /* ---------------- Constants -------------- */
 
     /**
-     * The default initial capacity for this table,
-     * used when not otherwise specified in a constructor.
+     * 默认初始容量
      */
     static final int DEFAULT_INITIAL_CAPACITY = 16;
 
     /**
-     * The default load factor for this table, used when not
-     * otherwise specified in a constructor.
+     * 默认加载银子
      */
     static final float DEFAULT_LOAD_FACTOR = 0.75f;
 
     /**
-     * The default concurrency level for this table, used when not
-     * otherwise specified in a constructor.
+     * 默认并发级别
      */
     static final int DEFAULT_CONCURRENCY_LEVEL = 16;
 
     /**
-     * The maximum capacity, used if a higher value is implicitly
-     * specified by either of the constructors with arguments.  MUST
-     * be a power of two <= 1<<30 to ensure that entries are indexable
-     * using ints.
+     * 最大容量,必须是2的幂次方
      */
     static final int MAXIMUM_CAPACITY = 1 << 30;
 
     /**
-     * The minimum capacity for per-segment tables.  Must be a power
-     * of two, at least two to avoid immediate resizing on next use
-     * after lazy construction.
+     * 每个segment的最小容量,必须是2的幂次方
      */
     static final int MIN_SEGMENT_TABLE_CAPACITY = 2;
 
     /**
-     * The maximum number of segments to allow; used to bound
-     * constructor arguments. Must be power of two less than 1 << 24.
+     * segment的最大数量,必须是2的幂次方
      */
     static final int MAX_SEGMENTS = 1 << 16; // slightly conservative
 
     /**
-     * Number of unsynchronized retries in size and containsValue
-     * methods before resorting to locking. This is used to avoid
-     * unbounded retries if tables undergo continuous modification
-     * which would make it impossible to obtain an accurate result.
+     * size和containsValus两个方法在使用同步锁之前的重试次数,
+     * 如果表经过连续修改，这将使得不可能获得准确的结果，所以使用这种方法来避免无限制的重试。
      */
     static final int RETRIES_BEFORE_LOCK = 2;
 
     /* ---------------- Fields -------------- */
 
     /**
-     * holds values which can't be initialized until after VM is booted.
+     * 静态内部类保证静态初始化不会在虚拟机启动时初始化
      */
     private static class Holder {
 
+
         /**
-        * Enable alternative hashing of String keys?
-        *
-        * <p>Unlike the other hash map implementations we do not implement a
-        * threshold for regulating whether alternative hashing is used for
-        * String keys. Alternative hashing is either enabled for all instances
-        * or disabled for all instances.
-        */
+         * 是否开启对String类型的key使用备选的hash算法
+         * 与其他hashmap的实现不同,我们不会使用阈值来判断是否对String类型的key使用备选的hash算法,
+         * 这里的启用或禁用是针对所有实例的
+         */
         static final boolean ALTERNATIVE_HASHING;
 
         static {
-            // Use the "threshold" system property even though our threshold
-            // behaviour is "ON" or "OFF".
+            // threshold > 0 && threshold < MAXIMUM_CAPACITY 表示启用备选hash算法
+            // threshold == -1 表示禁用备选hash算法
+            // threshold < -1 抛出异常
             String altThreshold = java.security.AccessController.doPrivileged(
                 new sun.security.action.GetPropertyAction(
                     "jdk.map.althashing.threshold"));
@@ -206,7 +100,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
                         ? Integer.parseInt(altThreshold)
                         : Integer.MAX_VALUE;
 
-                // disable alternative hashing if -1
+                // 禁用备选的hash算法
                 if (threshold == -1) {
                     threshold = Integer.MAX_VALUE;
                 }
@@ -222,11 +116,13 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
     }
 
     /**
-     * A randomizing value associated with this instance that is applied to
-     * hash code of keys to make hash collisions harder to find.
+     * 当前实例的一个随机值,用于更均匀的算出hash,减少hash碰撞的概率
      */
     private transient final int hashSeed = randomHashSeed(this);
 
+    /**
+     * 如果启用了备选hash算法,hash种子为一个随机int值,否则为0
+     */
     private static int randomHashSeed(ConcurrentHashMap instance) {
         if (sun.misc.VM.isBooted() && Holder.ALTERNATIVE_HASHING) {
             return sun.misc.Hashing.randomHashSeed(instance);
@@ -236,33 +132,49 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
     }
 
     /**
-     * Mask value for indexing into segments. The upper bits of a
-     * key's hash code are used to choose the segment.
+     * 这是为了索引到segments的一个隐藏值,hash值的更高位被用于选择某个segment
      */
     final int segmentMask;
 
     /**
-     * Shift value for indexing within segments.
+     * segments内的一个移位值
      */
     final int segmentShift;
 
     /**
-     * The segments, each of which is a specialized hash table.
+     * 保存所有Segment,每个Segment都是一个hash表
      */
     final Segment<K,V>[] segments;
 
+    /**
+     * 键视图
+     */
     transient Set<K> keySet;
+
+    /**
+     * entry视图
+     */
     transient Set<Map.Entry<K,V>> entrySet;
+
+    /**
+     * value视图
+     */
     transient Collection<V> values;
 
     /**
-     * ConcurrentHashMap list entry. Note that this is never exported
-     * out as a user-visible Map.Entry.
+     * ConcurrentHashMap中实际存放的类型,不会暴露到用户可见
      */
     static final class HashEntry<K,V> {
+        /**
+         * 缓存key的hash值
+         */
         final int hash;
         final K key;
         volatile V value;
+
+        /**
+         * 所在链表的下一个HashEntry
+         */
         volatile HashEntry<K,V> next;
 
         HashEntry(int hash, K key, V value, HashEntry<K,V> next) {
@@ -273,8 +185,8 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
         }
 
         /**
-         * Sets next field with volatile write semantics.  (See above
-         * about use of putOrderedObject.)
+         * 将当前对象的next属性设置为输入的HashEntry,
+         * putOrderedObject的作用是设置obj对象中offset偏移地址对应的整型field的值为指定值。但不提供可见性，如果需要具备可见性，则需要指定字段为volatile。
          */
         final void setNext(HashEntry<K,V> n) {
             UNSAFE.putOrderedObject(this, nextOffset, n);
@@ -282,9 +194,11 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V>
 
         // Unsafe mechanics
         static final sun.misc.Unsafe UNSAFE;
+        // next属性的偏移量
         static final long nextOffset;
         static {
             try {
+                // 获取next属性在当前类中偏移量
                 UNSAFE = sun.misc.Unsafe.getUnsafe();
                 Class k = HashEntry.class;
                 nextOffset = UNSAFE.objectFieldOffset
