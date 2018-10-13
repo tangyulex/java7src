@@ -71,55 +71,30 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ThreadLocal<T> {
     /**
-     * ThreadLocals rely on per-thread linear-probe hash maps attached
-     * to each thread (Thread.threadLocals and
-     * inheritableThreadLocals).  The ThreadLocal objects act as keys,
-     * searched via threadLocalHashCode.  This is a custom hash code
-     * (useful only within ThreadLocalMaps) that eliminates collisions
-     * in the common case where consecutively constructed ThreadLocals
-     * are used by the same threads, while remaining well-behaved in
-     * less common cases.
+     * ThreadLocalMap会使用此值作为HashCode来计算Entry放入table的哪个桶
      */
     private final int threadLocalHashCode = nextHashCode();
 
     /**
-     * The next hash code to be given out. Updated atomically. Starts at
-     * zero.
+     * 通过此值加上HASH_INCREMENT来计算出当前ThreadLocal的HashCode
+     * threadLocalHashCode = nextHashCode.getAndAdd(HASH_INCREMENT);
      */
-    private static AtomicInteger nextHashCode =
-        new AtomicInteger();
+    private static AtomicInteger nextHashCode = new AtomicInteger();
 
     /**
-     * The difference between successively generated hash codes - turns
-     * implicit sequential thread-local IDs into near-optimally spread
-     * multiplicative hash values for power-of-two-sized tables.
+     * threadLocalHashCode = nextHashCode.getAndAdd(HASH_INCREMENT);
      */
     private static final int HASH_INCREMENT = 0x61c88647;
 
     /**
-     * Returns the next hash code.
+     * 计算当前对象的hashCode
      */
     private static int nextHashCode() {
         return nextHashCode.getAndAdd(HASH_INCREMENT);
     }
 
     /**
-     * Returns the current thread's "initial value" for this
-     * thread-local variable.  This method will be invoked the first
-     * time a thread accesses the variable with the {@link #get}
-     * method, unless the thread previously invoked the {@link #set}
-     * method, in which case the <tt>initialValue</tt> method will not
-     * be invoked for the thread.  Normally, this method is invoked at
-     * most once per thread, but it may be invoked again in case of
-     * subsequent invocations of {@link #remove} followed by {@link #get}.
-     *
-     * <p>This implementation simply returns <tt>null</tt>; if the
-     * programmer desires thread-local variables to have an initial
-     * value other than <tt>null</tt>, <tt>ThreadLocal</tt> must be
-     * subclassed, and this method overridden.  Typically, an
-     * anonymous inner class will be used.
-     *
-     * @return the initial value for this thread-local
+     * 初始值,一般由使用者重写掉
      */
     protected T initialValue() {
         return null;
@@ -132,32 +107,31 @@ public class ThreadLocal<T> {
     }
 
     /**
-     * Returns the value in the current thread's copy of this
-     * thread-local variable.  If the variable has no value for the
-     * current thread, it is first initialized to the value returned
-     * by an invocation of the {@link #initialValue} method.
-     *
-     * @return the current thread's value of this thread-local
+     * 每个thread都有一个ThreadLocalMap,这个map中key为ThreadLocal对象(一个线程可以创建多个ThreadLocal对象,每个ThreadLocal中的threadLocalHashCode不同),value为要存储的值,
+     * 如果找不到对应的value,则会对ThreadLocalMap进行初始化,并返回initialValue这个方法提供的值(initialValue通常由使用者去重写)
      */
     public T get() {
+        // 获取当前线程对象
         Thread t = Thread.currentThread();
+        // 通过当前线程对象,获取对应的ThreadLocalMap,实际上就是t.threadLocals成员变量
         ThreadLocalMap map = getMap(t);
         if (map != null) {
+            // 根据当前这个ThreadLocal获取对应的Entry,如果有的话直接返回value值
             ThreadLocalMap.Entry e = map.getEntry(this);
             if (e != null)
                 return (T)e.value;
         }
+        // 如果当前thread还没有初始化ThreadLocalMap,这里进行初始化
         return setInitialValue();
     }
 
     /**
-     * Variant of set() to establish initialValue. Used instead
-     * of set() in case user has overridden the set() method.
-     *
-     * @return the initial value
+     * 初始化当前线程的ThreadLocalMap,并设置当前ThreadLocal的初始化值,这个值有initialValue方法提供
      */
     private T setInitialValue() {
+        // 获取初始化的值(initialValue方法通常由使用者重写)
         T value = initialValue();
+        // 对当前线程的ThreadLocalMap进行初始化,并设置初始化的值
         Thread t = Thread.currentThread();
         ThreadLocalMap map = getMap(t);
         if (map != null)
@@ -168,13 +142,7 @@ public class ThreadLocal<T> {
     }
 
     /**
-     * Sets the current thread's copy of this thread-local variable
-     * to the specified value.  Most subclasses will have no need to
-     * override this method, relying solely on the {@link #initialValue}
-     * method to set the values of thread-locals.
-     *
-     * @param value the value to be stored in the current thread's copy of
-     *        this thread-local.
+     * 设置值
      */
     public void set(T value) {
         Thread t = Thread.currentThread();
@@ -186,15 +154,7 @@ public class ThreadLocal<T> {
     }
 
     /**
-     * Removes the current thread's value for this thread-local
-     * variable.  If this thread-local variable is subsequently
-     * {@linkplain #get read} by the current thread, its value will be
-     * reinitialized by invoking its {@link #initialValue} method,
-     * unless its value is {@linkplain #set set} by the current thread
-     * in the interim.  This may result in multiple invocations of the
-     * <tt>initialValue</tt> method in the current thread.
-     *
-     * @since 1.5
+     * 移除值
      */
      public void remove() {
          ThreadLocalMap m = getMap(Thread.currentThread());
@@ -203,23 +163,14 @@ public class ThreadLocal<T> {
      }
 
     /**
-     * Get the map associated with a ThreadLocal. Overridden in
-     * InheritableThreadLocal.
-     *
-     * @param  t the current thread
-     * @return the map
+     * 获取指定thread的ThreadLocalMap
      */
     ThreadLocalMap getMap(Thread t) {
         return t.threadLocals;
     }
 
     /**
-     * Create the map associated with a ThreadLocal. Overridden in
-     * InheritableThreadLocal.
-     *
-     * @param t the current thread
-     * @param firstValue value for the initial entry of the map
-     * @param map the map to store.
+     * 创建一个ThreadLocalMap,并设置当前ThreadLocal的初始值
      */
     void createMap(Thread t, T firstValue) {
         t.threadLocals = new ThreadLocalMap(this, firstValue);
